@@ -37,7 +37,7 @@ jobs:
     - name: Create RDP User and Set Password
       shell: powershell
       run: |
-        $userName = "havpc01"
+        $userName = "havbanchoboss"
         $password = "HavpcRDP@2025!"
         Write-Host "INFO: Creating/updating user '$userName'..."
         $secPassword = ConvertTo-SecureString $password -AsPlainText -Force
