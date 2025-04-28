@@ -1,4 +1,4 @@
-name: Hoàng Anh Vũ
+name: hav
 
 on: workflow_dispatch # Chạy thủ công
 
@@ -14,7 +14,7 @@ jobs:
       run: |
         Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
         Expand-Archive ngrok.zip -DestinationPath . # Ngrok.exe sẽ ở thư mục hiện tại
-        Write-Host "✅ Đã tải và giải nén Ngrok."
+        Write-Host "INFO: Đã tải và giải nén Ngrok."
 
     # Bước 2: Xác thực Ngrok (Sử dụng Token Trực tiếp - KHÔNG AN TOÀN!)
     - name: Kết nối tài khoản Ngrok (Dùng Token trực tiếp)
@@ -24,7 +24,7 @@ jobs:
         $ngrokToken = "2wJOyBLBh4cMau6pWvzMKVgbA3H_gfM4VLsnY57s6GFJ4ztm"
         # Đường dẫn đúng là .\ngrok.exe
         .\ngrok.exe authtoken $ngrokToken
-        Write-Host "✅ Đã cấu hình Ngrok Authtoken trực tiếp."
+        Write-Host "INFO: Đã cấu hình Ngrok Authtoken trực tiếp."
 
     # Bước 3: Kích hoạt RDP trên Windows
     - name: Kích hoạt truy cập Remote Desktop (RDP)
@@ -33,38 +33,41 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-        Write-Host "✅ Đã kích hoạt RDP và mở Firewall."
+        Write-Host "INFO: Đã kích hoạt RDP và mở Firewall."
 
-    # Bước 4: Tạo người dùng và đặt mật khẩu theo yêu cầu
+    # Bước 4: Tạo người dùng và đặt mật khẩu theo yêu cầu (Phiên bản đơn giản)
     - name: Tạo người dùng RDP và đặt mật khẩu
       shell: powershell
       run: |
         $userName = "havpc01"
-        # --- Đặt mật khẩu theo yêu cầu ---
-        $password = "HavpcRDP@2025!"
-        # ----------------------------------
-        Write-Host "INFO: Đang tạo người dùng '$userName' với mật khẩu đã đặt."
+        $password = "HavpcRDP@2025!" # Mật khẩu theo yêu cầu
+        Write-Host "INFO: Đang tạo/cập nhật người dùng '$userName'..."
         $secPassword = ConvertTo-SecureString $password -AsPlainText -Force
-        try {
-            New-LocalUser -Name $userName -Password $secPassword -FullName "$userName (GitHub Actions)" -Description "Temp RDP User" -ErrorAction Stop
-        } catch {
-             Write-Error "Lỗi khi tạo người dùng '$userName': $_"
-             Write-Warning "Thử đặt lại mật khẩu cho người dùng '$userName' đã tồn tại..."
-             try { Set-LocalUser -Name $userName -Password $secPassword -ErrorAction Stop; Write-Host "Đã đặt lại mật khẩu." } catch { Write-Error "Lỗi khi đặt lại mật khẩu: $_"; exit 1 }
-        }
-        try { Add-LocalGroupMember -Group "Remote Desktop Users" -Member $userName -ErrorAction Stop } catch { if ($_.Exception.Message -like "*already a member*") { Write-Warning "'$userName' đã là thành viên RDP." } else { Write-Error "Lỗi thêm vào nhóm RDP: $_"; exit 1 } }
-        try { Add-LocalGroupMember -Group "Administrators" -Member $userName -ErrorAction Stop; Write-Host "Đã thêm '$userName' vào nhóm 'Administrators'." } catch { if ($_.Exception.Message -like "*already a member*") { Write-Warning "'$userName' đã là Admin." } else { Write-Warning "Lỗi thêm vào Admin: $_" } }
-        Write-Host "--------------------------------------------------" -ForegroundColor Green
-        Write-Host "✅ Đã tạo/cập nhật người dùng RDP!" -ForegroundColor Green
-        Write-Host "   👤 Username: $userName" -ForegroundColor Green
-        Write-Host "   🔑 Password: $password" -ForegroundColor Green
-        Write-Host "--------------------------------------------------" -ForegroundColor Green
+
+        # Cố gắng tạo người dùng, nếu lỗi thì tiếp tục (có thể đã tồn tại)
+        New-LocalUser -Name $userName -Password $secPassword -FullName "$userName (GitHub Actions)" -Description "Temp RDP User" -ErrorAction SilentlyContinue
+
+        # Cố gắng đặt lại mật khẩu phòng trường hợp user đã tồn tại và cần cập nhật pass
+        Set-LocalUser -Name $userName -Password $secPassword -ErrorAction SilentlyContinue
+
+        # Thêm vào nhóm RDP Users (quan trọng)
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member $userName -ErrorAction SilentlyContinue
+
+        # Thêm vào nhóm Administrators (tùy chọn)
+        Add-LocalGroupMember -Group "Administrators" -Member $userName -ErrorAction SilentlyContinue
+
+        # In thông tin ra (không dùng màu để tránh lỗi parsing)
+        Write-Host "--------------------------------------------------"
+        Write-Host "INFO: Đã hoàn tất tạo/cập nhật người dùng RDP."
+        Write-Host "   Username: $userName"
+        Write-Host "   Password: $password"
+        Write-Host "--------------------------------------------------"
 
     # Bước 5: Khởi động Ngrok Tunnel trong nền (Sử dụng đường dẫn đúng)
     - name: Tạo Ngrok Tunnel cho RDP (Cổng 3389)
       shell: powershell
       run: |
-        Write-Host "Đang khởi động Ngrok tunnel cho cổng 3389 trong nền..."
+        Write-Host "INFO: Đang khởi động Ngrok tunnel cho cổng 3389 trong nền..."
         $ngrokLogPath = Join-Path -Path $env:RUNNER_TEMP -ChildPath "ngrok.log"
         # Đường dẫn đúng là .\ngrok.exe
         Start-Process powershell -ArgumentList "-NoExit", "-Command", "`".\ngrok.exe tcp 3389 --log '$ngrokLogPath'`""
@@ -77,25 +80,26 @@ jobs:
         $maxAttempts = 5
         $waitTime = 15
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-            Write-Host "⏳ Lần thử $attempt/$maxAttempts: Chờ $waitTime giây..."
+            Write-Host "INFO: Lần thử $attempt/$maxAttempts: Chờ $waitTime giây..."
             Start-Sleep -Seconds $waitTime
-            Write-Host "⏳ Kiểm tra tiến trình Ngrok..."
+            Write-Host "INFO: Kiểm tra tiến trình Ngrok..."
             $ngrokProcess = Get-Process ngrok -ErrorAction SilentlyContinue
-            if (-not $ngrokProcess) { Write-Warning "❌ Lỗi: Tiến trình ngrok.exe không chạy!"; continue }
-            Write-Host "✅ Ngrok đang chạy (PID: $($ngrokProcess.Id)). Lấy URL API..."
+            if (-not $ngrokProcess) { Write-Warning "WARN: Tiến trình ngrok.exe không chạy!"; continue }
+            Write-Host "INFO: Ngrok đang chạy (PID: $($ngrokProcess.Id)). Lấy URL API..."
             try {
                 $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 10 -ErrorAction Stop
                 $tcpTunnel = $tunnels.tunnels | Where-Object {$_.proto -eq 'tcp'} | Select-Object -First 1
                 if ($tcpTunnel) {
-                    Write-Host "--------------------------------------------------" -ForegroundColor Cyan
-                    Write-Host "✅ Địa chỉ kết nối RDP (Ngrok URL): $($tcpTunnel.public_url)" -ForegroundColor Cyan
-                    Write-Host "   (Sử dụng địa chỉ này trong Remote Desktop Client)" -ForegroundColor Cyan
-                    Write-Host "--------------------------------------------------" -ForegroundColor Cyan
+                    # In kết quả thành công (không màu)
+                    Write-Host "--------------------------------------------------"
+                    Write-Host "SUCCESS: Địa chỉ kết nối RDP (Ngrok URL): $($tcpTunnel.public_url)"
+                    Write-Host "   (Sử dụng địa chỉ này trong Remote Desktop Client)"
+                    Write-Host "--------------------------------------------------"
                     exit 0 # Thành công
-                } else { Write-Warning "⚠️ Không tìm thấy tunnel TCP từ API lần $attempt." }
-            } catch { Write-Warning "❌ Lỗi lấy URL lần $attempt: $_" }
+                } else { Write-Warning "WARN: Không tìm thấy tunnel TCP từ API lần $attempt." }
+            } catch { Write-Warning "WARN: Lỗi lấy URL lần $attempt: $_" }
         }
-        Write-Error "❌ Không thể lấy URL Ngrok sau $maxAttempts lần thử."
+        Write-Error "ERROR: Không thể lấy URL Ngrok sau $maxAttempts lần thử."
         $ngrokLogPath = Join-Path -Path $env:RUNNER_TEMP -ChildPath "ngrok.log"
         if (Test-Path $ngrokLogPath) { Write-Host "--- Log Ngrok ---"; Get-Content $ngrokLogPath -Tail 10; Write-Host "-----------------" }
         exit 1 # Báo lỗi workflow
@@ -104,6 +108,6 @@ jobs:
     - name: Giữ cho Workflow hoạt động
       shell: powershell
       run: |
-        Write-Host "✅ Máy ảo Windows RDP sẵn sàng! Ngrok đang chạy." -ForegroundColor Green
+        Write-Host "INFO: Máy ảo Windows RDP sẵn sàng! Ngrok đang chạy."
         Write-Host "   Workflow sẽ tiếp tục chạy để duy trì kết nối."
         while ($true) { Start-Sleep -Seconds 300; Write-Host "$(Get-Date): Workflow vẫn đang chạy..." }
