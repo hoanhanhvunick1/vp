@@ -20,7 +20,7 @@ jobs:
     - name: Connect Ngrok Account (Direct Token)
       shell: powershell
       run: |
-        $ngrokToken = "2wJOyBLBh4cMau6pWvzMKVgbA3H_gfM4VLsnY57s6GFJ4ztm"
+        $ngrokToken = "2IRByDy0PAKl3baoREtehBv91Sr_3Gxksf8pzNxSTqhNy9L2"
         .\ngrok.exe authtoken $ngrokToken
         Write-Host "INFO: Ngrok Authtoken configured directly."
 
