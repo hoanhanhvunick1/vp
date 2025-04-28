@@ -32,7 +32,7 @@ jobs:
     - name: Tạo người dùng RDP và đặt mật khẩu
       run: |
         $userName = "havpc01"
-        $password = "pc01"
+        $password = "HavpcRDP@2025!"
         # ⚠️ CẢNH BÁO: Mật khẩu "pc01" RẤT YẾU! Nên sử dụng mật khẩu mạnh hơn.
 
         # Tạo đối tượng mật khẩu an toàn
