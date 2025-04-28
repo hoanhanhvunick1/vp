@@ -1,4 +1,4 @@
-name: Windows RDP via Ngrok (Sử dụng Secret - Đã sửa đường dẫn Ngrok)
+name: Hoàng Anh Vũ
 
 on: workflow_dispatch # Chạy thủ công
 
@@ -16,19 +16,15 @@ jobs:
         Expand-Archive ngrok.zip -DestinationPath . # Ngrok.exe sẽ ở thư mục hiện tại
         Write-Host "✅ Đã tải và giải nén Ngrok."
 
-    # Bước 2: Xác thực Ngrok (Sử dụng đường dẫn đúng)
-    - name: Kết nối tài khoản Ngrok (Dùng Secret)
-      env:
-        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+    # Bước 2: Xác thực Ngrok (Sử dụng Token Trực tiếp - KHÔNG AN TOÀN!)
+    - name: Kết nối tài khoản Ngrok (Dùng Token trực tiếp)
       shell: powershell
       run: |
-        if (-not $Env:NGROK_AUTH_TOKEN) {
-            Write-Error "Lỗi: Secret 'NGROK_AUTH_TOKEN' chưa được đặt trong cài đặt kho lưu trữ!"
-            exit 1
-        }
+        # ⚠️ CẢNH BÁO: Nhúng token trực tiếp là RẤT KHÔNG AN TOÀN.
+        $ngrokToken = "2wJOyBLBh4cMau6pWvzMKVgbA3H_gfM4VLsnY57s6GFJ4ztm"
         # Đường dẫn đúng là .\ngrok.exe
-        .\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
-        Write-Host "✅ Đã cấu hình Ngrok Authtoken từ Secret."
+        .\ngrok.exe authtoken $ngrokToken
+        Write-Host "✅ Đã cấu hình Ngrok Authtoken trực tiếp."
 
     # Bước 3: Kích hoạt RDP trên Windows
     - name: Kích hoạt truy cập Remote Desktop (RDP)
@@ -39,14 +35,14 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
         Write-Host "✅ Đã kích hoạt RDP và mở Firewall."
 
-    # Bước 4: Tạo người dùng và đặt mật khẩu mạnh
+    # Bước 4: Tạo người dùng và đặt mật khẩu theo yêu cầu
     - name: Tạo người dùng RDP và đặt mật khẩu
       shell: powershell
       run: |
         $userName = "havpc01"
-        # --- !!! QUAN TRỌNG: THAY ĐỔI MẬT KHẨU NÀY !!! ---
-        $password = "HavpcRDP@2025!" # Thay bằng mật khẩu mạnh của bạn
-        # -------------------------------------------------
+        # --- Đặt mật khẩu theo yêu cầu ---
+        $password = "HavpcRDP@2025!"
+        # ----------------------------------
         Write-Host "INFO: Đang tạo người dùng '$userName' với mật khẩu đã đặt."
         $secPassword = ConvertTo-SecureString $password -AsPlainText -Force
         try {
