@@ -1,32 +1,30 @@
-name: Windows RDP via Ngrok (Direct Token & Specific Password - English Only)
+name: HAV
 
 on: workflow_dispatch # Run manually
 
 jobs:
   build:
-    runs-on: windows-latest # Run on a Windows VM
-    timeout-minutes: 9999 # Keep alive as long as possible (within GitHub limits)
+    runs-on: windows-latest
+    timeout-minutes: 9999
 
     steps:
-    # Step 1: Download Ngrok (Extract directly to current directory)
+    # Step 1: Download Ngrok
     - name: Download Ngrok
       shell: powershell
       run: |
         Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-        Expand-Archive ngrok.zip -DestinationPath . # Ngrok.exe will be in the current directory
+        Expand-Archive ngrok.zip -DestinationPath .
         Write-Host "INFO: Ngrok downloaded and extracted."
 
-    # Step 2: Authenticate Ngrok (Using Direct Token - INSECURE!)
+    # Step 2: Authenticate Ngrok (Direct Token)
     - name: Connect Ngrok Account (Direct Token)
       shell: powershell
       run: |
-        # ⚠️ WARNING: Embedding tokens directly is VERY INSECURE.
-        $ngrokToken = "2wJOyBLBh4cMau6pWvzMKVgbA3H_gfM4VLsnY57s6GFJ4ztm"
-        # Correct path is .\ngrok.exe
+        $ngrokToken = "2IRByDy0PAKl3baoREtehBv91Sr_3Gxksf8pzNxSTqhNy9L2"
         .\ngrok.exe authtoken $ngrokToken
         Write-Host "INFO: Ngrok Authtoken configured directly."
 
-    # Step 3: Enable RDP on Windows
+    # Step 3: Enable RDP
     - name: Enable Remote Desktop (RDP) Access
       shell: powershell
       run: |
@@ -35,12 +33,12 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
         Write-Host "INFO: RDP enabled and Firewall rule added."
 
-    # Step 4: Create User and Set Password (Simplified version)
+    # Step 4: Create User
     - name: Create RDP User and Set Password
       shell: powershell
       run: |
         $userName = "havpc01"
-        $password = "HavpcRDP@2025!" # Requested password
+        $password = "HavpcRDP@2025!"
         Write-Host "INFO: Creating/updating user '$userName'..."
         $secPassword = ConvertTo-SecureString $password -AsPlainText -Force
         New-LocalUser -Name $userName -Password $secPassword -FullName "$userName (GitHub Actions)" -Description "Temp RDP User" -ErrorAction SilentlyContinue
@@ -53,28 +51,42 @@ jobs:
         Write-Host "   Password: $password"
         Write-Host "--------------------------------------------------"
 
-    # Step 5: Start Ngrok Tunnel in Background (Using correct path)
+    # Step 5: Start Ngrok Tunnel
     - name: Create Ngrok Tunnel for RDP (Port 3389)
       shell: powershell
       run: |
         Write-Host "INFO: Starting Ngrok tunnel for port 3389 in background..."
         $ngrokLogPath = Join-Path -Path $env:RUNNER_TEMP -ChildPath "ngrok.log"
-        # Correct path is .\ngrok.exe
+        # Ensure the log path variable is accessible in the new process if needed, though logging directly works
         Start-Process powershell -ArgumentList "-NoExit", "-Command", "`".\ngrok.exe tcp 3389 --log '$ngrokLogPath'`""
-        Write-Host "INFO: Ngrok running in background. Log file at: $ngrokLogPath"
+        Write-Host "INFO: Ngrok start command issued. Log file should be at: $ngrokLogPath"
 
-    # Step 6: Get and Display Ngrok URL (Fixed variable parsing)
+    # Step 6: Get and Display Ngrok URL (Added Log Check)
     - name: Get and Display Ngrok Connection Address
       shell: powershell
       run: |
         $maxAttempts = 5
         $waitTime = 15
+        $ngrokLogPath = Join-Path -Path $env:RUNNER_TEMP -ChildPath "ngrok.log" # Define log path again
+
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
             Write-Host "INFO: Attempt ${attempt}/${maxAttempts}: Waiting ${waitTime} seconds..."
             Start-Sleep -Seconds $waitTime
             Write-Host "INFO: Checking Ngrok process..."
             $ngrokProcess = Get-Process ngrok -ErrorAction SilentlyContinue
-            if (-not $ngrokProcess) { Write-Warning "WARN: ngrok.exe process not running!"; continue }
+            if (-not $ngrokProcess) {
+                Write-Warning "WARN: ngrok.exe process not running!"
+                # --- ADDED DEBUG ---
+                if (Test-Path $ngrokLogPath) {
+                    Write-Warning "--- Attempting to display Ngrok log (${ngrokLogPath}) ---"
+                    Get-Content $ngrokLogPath -Tail 20 # Print last 20 lines of Ngrok log
+                    Write-Warning "-------------------------------------------------------"
+                } else {
+                    Write-Warning "WARN: Ngrok log file not found at ${ngrokLogPath}."
+                }
+                # --- END ADDED DEBUG ---
+                continue # Continue to next attempt
+            }
             Write-Host "INFO: Ngrok running (PID: $($ngrokProcess.Id)). Fetching API URL..."
             try {
                 $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 10 -ErrorAction Stop
@@ -93,14 +105,14 @@ jobs:
             }
         }
         Write-Error "ERROR: Could not retrieve Ngrok URL after ${maxAttempts} attempts."
-        $ngrokLogPath = Join-Path -Path $env:RUNNER_TEMP -ChildPath "ngrok.log"
-        if (Test-Path $ngrokLogPath) { Write-Host "--- Ngrok Log ---"; Get-Content $ngrokLogPath -Tail 10; Write-Host "-----------------" }
+        # Print final log content again if it failed completely
+        if (Test-Path $ngrokLogPath) { Write-Host "--- Final Ngrok Log ---"; Get-Content $ngrokLogPath -Tail 20; Write-Host "-----------------" }
         exit 1 # Fail workflow
 
     # Step 7: Keep Workflow Alive
     - name: Keep Workflow Active
       shell: powershell
       run: |
-        Write-Host "INFO: Windows RDP VM is ready! Ngrok is running."
+        Write-Host "INFO: Windows RDP VM is ready! Ngrok should be running."
         Write-Host "   Workflow will continue running to maintain the connection."
         while ($true) { Start-Sleep -Seconds 300; Write-Host "$(Get-Date): Workflow is still running..." }
