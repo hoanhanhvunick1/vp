@@ -1,0 +1,91 @@
+name: Windows RDP via Ngrok (Cách 1)
+
+on: workflow_dispatch # Chạy thủ công
+
+jobs:
+  build:
+    runs-on: windows-latest # Chạy trên máy ảo Windows
+    timeout-minutes: 9999 # Giữ chạy lâu nhất có thể (trong giới hạn của GitHub)
+
+    steps:
+    # Bước 1: Tải Ngrok
+    - name: Tải Ngrok
+      run: |
+        Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+        Expand-Archive ngrok.zip
+
+    # Bước 2: Xác thực Ngrok (SỬ DỤNG TOKEN TRỰC TIẾP - KHÔNG AN TOÀN!)
+    - name: Kết nối tài khoản Ngrok (Dùng Token trực tiếp)
+      # ⚠️ CẢNH BÁO: Nhúng token trực tiếp là RẤT KHÔNG AN TOÀN.
+      #           Hãy sử dụng GitHub Secrets thay thế nếu có thể.
+      run: .\ngrok\ngrok.exe authtoken 2wJOyBLBh4cMau6pWvzMKVgbA3H_gfM4VLsnY57s6GFJ4ztm
+
+    # Bước 3: Kích hoạt RDP trên Windows
+    - name: Kích hoạt truy cập Remote Desktop (RDP)
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+        Write-Host "✅ Đã kích hoạt RDP và mở Firewall."
+
+    # Bước 4: Tạo người dùng và đặt mật khẩu theo yêu cầu
+    - name: Tạo người dùng RDP và đặt mật khẩu
+      run: |
+        $userName = "havpc01"
+        $password = "pc01"
+        # ⚠️ CẢNH BÁO: Mật khẩu "pc01" RẤT YẾU! Nên sử dụng mật khẩu mạnh hơn.
+
+        # Tạo đối tượng mật khẩu an toàn
+        $secPassword = ConvertTo-SecureString $password -AsPlainText -Force
+
+        # Tạo người dùng cục bộ mới
+        New-LocalUser -Name $userName -Password $secPassword -FullName "$userName (Created by GitHub Actions)" -Description "Temporary RDP User"
+
+        # Thêm người dùng vào nhóm Remote Desktop Users để cho phép đăng nhập
+        Add-LocalGroupMember -Group "Remote Desktop Users" -Member $userName
+
+        # (Tùy chọn) Thêm người dùng vào nhóm Administrators để có quyền quản trị cao hơn
+        Add-LocalGroupMember -Group "Administrators" -Member $userName
+
+        Write-Host "--------------------------------------------------"
+        Write-Host "✅ Đã tạo người dùng RDP thành công!"
+        Write-Host "   👤 Tên đăng nhập (Username): $userName"
+        Write-Host "   🔑 Mật khẩu (Password)    : $password (CẢNH BÁO: Mật khẩu yếu!)"
+        Write-Host "--------------------------------------------------"
+
+    # Bước 5: Khởi động Ngrok Tunnel trong nền
+    - name: Tạo Ngrok Tunnel cho RDP (Cổng 3389)
+      run: Start-Process Powershell -ArgumentList '-Noexit -Command ".\ngrok\ngrok.exe tcp 3389 --log=stdout"' # Thêm log để dễ debug
+
+    # Bước 6: Lấy và hiển thị URL Ngrok
+    - name: Lấy và hiển thị địa chỉ kết nối Ngrok
+      run: |
+        Start-Sleep -Seconds 10 # Chờ Ngrok khởi động và tạo tunnel
+        Write-Host "⏳ Đang lấy địa chỉ Ngrok..."
+        try {
+            $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels"
+            # Tìm tunnel TCP đầu tiên
+            $tcpTunnel = $tunnels.tunnels | Where-Object {$_.proto -eq 'tcp'} | Select-Object -First 1
+            if ($tcpTunnel) {
+                Write-Host "--------------------------------------------------"
+                Write-Host "✅ Địa chỉ kết nối RDP (Ngrok URL): $($tcpTunnel.public_url)"
+                Write-Host "   (Sử dụng địa chỉ này trong Remote Desktop Client)"
+                Write-Host "--------------------------------------------------"
+            } else {
+                Write-Host "⚠️ Không tìm thấy tunnel TCP từ API Ngrok. Kiểm tra log Ngrok."
+            }
+        } catch {
+            Write-Host "❌ Lỗi khi lấy URL Ngrok: $_"
+            Write-Host "   -> Hãy kiểm tra log của bước 'Tạo Ngrok Tunnel' hoặc truy cập http://127.0.0.1:4040 (nếu có thể)."
+        }
+
+    # Bước 7: Giữ cho Workflow chạy (để RDP và Ngrok không bị tắt)
+    - name: Giữ cho Workflow hoạt động
+      run: |
+        Write-Host "✅ Máy ảo Windows RDP đã sẵn sàng!"
+        Write-Host "   Script sẽ chạy vòng lặp để giữ kết nối..."
+        # Tải và chạy script vòng lặp từ repo gốc (hoặc tạo vòng lặp đơn giản)
+        # Invoke-WebRequest https://raw.githubusercontent.com/30dayscoding/rdp/main/loop.ps1 -OutFile loop.ps1
+        # ./loop.ps1
+        # Hoặc dùng vòng lặp đơn giản hơn:
+        while ($true) { Start-Sleep -Seconds 60; Write-Host "..." } # In dấu ... mỗi phút
