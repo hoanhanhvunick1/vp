@@ -1,4 +1,4 @@
-name: hav
+name: Windows RDP via Ngrok (Token Trực tiếp & Mật khẩu HavpcRDP@2025! - Sửa lỗi Parsing)
 
 on: workflow_dispatch # Chạy thủ công
 
@@ -43,20 +43,10 @@ jobs:
         $password = "HavpcRDP@2025!" # Mật khẩu theo yêu cầu
         Write-Host "INFO: Đang tạo/cập nhật người dùng '$userName'..."
         $secPassword = ConvertTo-SecureString $password -AsPlainText -Force
-
-        # Cố gắng tạo người dùng, nếu lỗi thì tiếp tục (có thể đã tồn tại)
         New-LocalUser -Name $userName -Password $secPassword -FullName "$userName (GitHub Actions)" -Description "Temp RDP User" -ErrorAction SilentlyContinue
-
-        # Cố gắng đặt lại mật khẩu phòng trường hợp user đã tồn tại và cần cập nhật pass
         Set-LocalUser -Name $userName -Password $secPassword -ErrorAction SilentlyContinue
-
-        # Thêm vào nhóm RDP Users (quan trọng)
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member $userName -ErrorAction SilentlyContinue
-
-        # Thêm vào nhóm Administrators (tùy chọn)
         Add-LocalGroupMember -Group "Administrators" -Member $userName -ErrorAction SilentlyContinue
-
-        # In thông tin ra (không dùng màu để tránh lỗi parsing)
         Write-Host "--------------------------------------------------"
         Write-Host "INFO: Đã hoàn tất tạo/cập nhật người dùng RDP."
         Write-Host "   Username: $userName"
@@ -73,33 +63,40 @@ jobs:
         Start-Process powershell -ArgumentList "-NoExit", "-Command", "`".\ngrok.exe tcp 3389 --log '$ngrokLogPath'`""
         Write-Host "INFO: Ngrok đang chạy nền. Log tại: $ngrokLogPath"
 
-    # Bước 6: Lấy và hiển thị URL Ngrok (với kiểm tra và tăng thời gian chờ)
+    # Bước 6: Lấy và hiển thị URL Ngrok (Đã sửa lỗi parsing biến)
     - name: Lấy và hiển thị địa chỉ kết nối Ngrok
       shell: powershell
       run: |
         $maxAttempts = 5
         $waitTime = 15
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-            Write-Host "INFO: Lần thử $attempt/$maxAttempts: Chờ $waitTime giây..."
+            # Sử dụng ${} để bao quanh biến
+            Write-Host "INFO: Lần thử ${attempt}/${maxAttempts}: Chờ ${waitTime} giây..."
             Start-Sleep -Seconds $waitTime
             Write-Host "INFO: Kiểm tra tiến trình Ngrok..."
             $ngrokProcess = Get-Process ngrok -ErrorAction SilentlyContinue
             if (-not $ngrokProcess) { Write-Warning "WARN: Tiến trình ngrok.exe không chạy!"; continue }
+            # Sử dụng ${} để bao quanh biến
             Write-Host "INFO: Ngrok đang chạy (PID: $($ngrokProcess.Id)). Lấy URL API..."
             try {
                 $tunnels = Invoke-RestMethod -Uri "http://127.0.0.1:4040/api/tunnels" -TimeoutSec 10 -ErrorAction Stop
                 $tcpTunnel = $tunnels.tunnels | Where-Object {$_.proto -eq 'tcp'} | Select-Object -First 1
                 if ($tcpTunnel) {
-                    # In kết quả thành công (không màu)
                     Write-Host "--------------------------------------------------"
                     Write-Host "SUCCESS: Địa chỉ kết nối RDP (Ngrok URL): $($tcpTunnel.public_url)"
                     Write-Host "   (Sử dụng địa chỉ này trong Remote Desktop Client)"
                     Write-Host "--------------------------------------------------"
                     exit 0 # Thành công
-                } else { Write-Warning "WARN: Không tìm thấy tunnel TCP từ API lần $attempt." }
-            } catch { Write-Warning "WARN: Lỗi lấy URL lần $attempt: $_" }
+                } else {
+                    # Sử dụng ${} để bao quanh biến
+                    Write-Warning "WARN: Không tìm thấy tunnel TCP từ API lần ${attempt}."
+                }
+            } catch {
+                # Sử dụng ${} để bao quanh biến và $_
+                Write-Warning "WARN: Lỗi lấy URL lần ${attempt}: ${_}"
+            }
         }
-        Write-Error "ERROR: Không thể lấy URL Ngrok sau $maxAttempts lần thử."
+        Write-Error "ERROR: Không thể lấy URL Ngrok sau ${maxAttempts} lần thử." # Sử dụng ${}
         $ngrokLogPath = Join-Path -Path $env:RUNNER_TEMP -ChildPath "ngrok.log"
         if (Test-Path $ngrokLogPath) { Write-Host "--- Log Ngrok ---"; Get-Content $ngrokLogPath -Tail 10; Write-Host "-----------------" }
         exit 1 # Báo lỗi workflow
