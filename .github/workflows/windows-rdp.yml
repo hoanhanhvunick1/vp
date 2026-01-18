@@ -20,7 +20,7 @@ jobs:
     - name: Connect Ngrok Account (Direct Token)
       shell: powershell
       run: |
-        $ngrokToken = "2IRByDy0PAKl3baoREtehBv91Sr_3Gxksf8pzNxSTqhNy9L2"
+        $ngrokToken = "38Q6t6Tk6MEvxJ518KZkVtUIegk_3fa4Gi9X663SfbDGq1QNj"
         .\ngrok.exe authtoken $ngrokToken
         Write-Host "INFO: Ngrok Authtoken configured directly."
 
@@ -37,8 +37,8 @@ jobs:
     - name: Create RDP User and Set Password
       shell: powershell
       run: |
-        $userName = "havbanchoboss"
-        $password = "HavpcRDP@2025!"
+        $userName = "havdepzai"
+        $password = "HavpcRDP@2026!"
         Write-Host "INFO: Creating/updating user '$userName'..."
         $secPassword = ConvertTo-SecureString $password -AsPlainText -Force
         New-LocalUser -Name $userName -Password $secPassword -FullName "$userName (GitHub Actions)" -Description "Temp RDP User" -ErrorAction SilentlyContinue
